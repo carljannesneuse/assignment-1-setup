@@ -1,6 +1,6 @@
 ---
 title: "Assignment 1 - The tidyverse"
-author: "FILL IN YOUR FULL NAME"
+author: "Carl Jannes Neuse #please mark this version"
 date: "`r format(Sys.time(), '%B %d, %Y | %H:%M:%S | %Z')`"
 output:
   html_document:
@@ -30,7 +30,11 @@ knitr::opts_chunk$set(echo = TRUE,
 ***
 
 ```{r, include = T}
-# LOAD THE PACKAGES YOU ARE USING IN THIS CODE CHUNK library(nameofpackage)
+library(tidyverse)
+library(legislatoR)
+library(lubridate)
+library(knitr)
+library(kableExtra)
 ```
 
 <br>
@@ -66,31 +70,89 @@ The following tasks will be based on data from the `core` and `political` tables
 a) What's the overall share of female legislators in the entire dataset?
 
 ```{r}
-# YOUR CODE HERE
+aut_core <- get_core(legislature = "aut")
+
+female_share <- mean(aut_core$sex == "female")
+
+# In the entire dataset on the Austrian Nationalrat, the overall share of female legislators is 18.62%
+
 ```
 
 b) How many (both in absolute and relative terms) legislators died in the same place they were born in?
 
 ```{r}
-# YOUR CODE HERE
+same_birth_and_death <- subset(aut_core, birthplace == deathplace)
+253/1923
+
+# 253 legislators, or 13.16%, died in the same place where the were born in. 
+
 ```
 
 c) Create a new variable `age_at_death` that reports the age at which legislators died. Then, plot the distribution of that variable for the entire dataset.
 
 ```{r}
-# YOUR CODE HERE
+aut_core <- aut_core %>%
+  mutate(
+    birth = as.Date(birth, format = "%Y-%m-%d"), 
+    death = as.Date(death, format = "%Y-%m-%d"), 
+    age_at_death = as.numeric(difftime(death, birth, units = "auto")),
+    age_at_death = age_at_death / 365
+  )
+
+ggplot(aut_core, aes(x = age_at_death)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+  labs(
+    title = "Figure 1: Distribution of Age at Death of Legislators in Austria",
+    x = "Age at Death (Years)",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+
+# One notices an outlier, Friedrich Schmidt, who apparently died at age 125. Upon double checking the information on his death, this is wrong. Mr Schmidt died in 1943 at age 69. 
 ```
 
 d) What is the most frequent birthday in your sample (e.g., “January 15")?
 
 ```{r}
-# YOUR CODE HERE
+aut_core <- aut_core %>%
+  mutate(
+    birth = as.Date(birth, format = "%Y-%m-%d"), 
+    birth_month_day = format(birth, format = "%m-%d")
+  )
+
+birth_month_day_counts <- table(aut_core$birth_month_day)
+
+most_frequent_birth_month_day <- names(birth_month_day_counts[birth_month_day_counts == max(birth_month_day_counts)])
+
+# The most frequent birthday appears to be January 1st. However, January 1st is often put down in birth certificates, when the actual date of birth is unknown. Hence, I will explore the second most frequent birthday now. 
+
+sorted_counts <- sort(birth_month_day_counts, decreasing = TRUE)
+
+second_most_frequent_birth_month_day <- names(sorted_counts)[2]
+
+1923/365
+
+# The second most frequent birthday is November 3rd. While we observe January 1st 25 times, we observe November 3rd 15 times. We can assume that birthdays are, not perfectly but sufficiently well, equally distributed throughout the year. We should thus see every date represented about 5 times. January 1st being the birthday of 25 observations thus seems highly unlikely. At the same time observing November 3rd 15 times also appears to be rather unlikely, but one could still make the case that this falls under the variation that is to be expected. To summarize, theoretically the most frequent birthday is January 1st, but practically rather November 3rd.
+
 ```
 
 e) Generate a table that provides the 5 legislators with the longest names (in terms of number of characters, ignoring whitespace). 
 
 ```{r}
-# YOUR CODE HERE
+aut_core <- aut_core %>%
+  mutate(name_length = nchar(gsub(" ", "", name)))
+
+top_longest_names <- aut_core %>%
+  arrange(desc(name_length)) %>%
+  head(5)
+
+table_top_longest_names <- top_longest_names %>%
+  select(name, name_length) %>%
+  kable("html") %>%
+  kable_styling() %>%
+  add_header_above(c("Table 1: The 5 Austrian Legislators with the Longest Names" = 2))
+
+# The longest names are: Johannes Schauer-Schoberlechner, Elisabeth Kaufmann-Bruckberger, Katharina Cortolezis-Schlager, Daniela Holzinger-Vogtenhuber and Douglas Hoyos-Trauttmansdorff. 
 ```
 
 <br>
@@ -102,17 +164,134 @@ e) Generate a table that provides the 5 legislators with the longest names (in t
 a) Using data from all sessions, provide a plot that shows the share of female legislators by session! 
 
 ```{r}
-# YOUR CODE HERE
+aut_political <- get_political(legislature ="aut")
+
+aut_core_political <- left_join(aut_core, aut_political, by = "pageid")
+
+session_female_share <- 
+  aut_core_political %>% 
+  group_by(session) %>% 
+  summarize(female_share = mean(sex == "female"))
+
+ggplot(session_female_share, aes(x = session, y = female_share)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "Session of Parliament", y = "Share of Female Politicians (in %)",
+       title = "Figure 2: Share of Female Politicians in Austrian Parliament") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
 ```
 
 b) Explore another relation of variables in the dataset. Your analysis should (i) use data from both the `core` and the `political` table and (ii) feature data from several sessions. Also, offer a brief description and interpretation of your findings! 
 
 ```{r}
-# YOUR CODE HERE
+övp_female_share <- 
+  aut_core_political %>% 
+  group_by(session) %>% 
+  filter(party == "ÖVP") %>% 
+  summarize(female_share = mean(sex == "female"))
+
+average_övp_female_share_5_to_15 <- övp_female_share %>%
+  filter(session >= 5 & session <= 15) %>%
+  summarize(average_female_share = mean(female_share, na.rm = TRUE))
+
+average_övp_female_share_16_to_27 <- övp_female_share %>%
+  filter(session >= 16 & session <= 27) %>%
+  summarize(average_female_share = mean(female_share, na.rm = TRUE))
+
+spö_female_share <- 
+  aut_core_political %>% 
+  group_by(session) %>% 
+  filter(party == "SPÖ") %>% 
+  summarize(female_share = mean(sex == "female"))
+
+average_spö_female_share_5_to_15 <- spö_female_share %>%
+  filter(session >= 5 & session <= 15) %>%
+  summarize(average_female_share = mean(female_share, na.rm = TRUE))
+
+average_spö_female_share_16_to_27 <- spö_female_share %>%
+  filter(session >= 16 & session <= 27) %>%
+  summarize(average_female_share = mean(female_share, na.rm = TRUE))
+
+fpö_female_share <- 
+  aut_core_political %>% 
+  group_by(session) %>% 
+  filter(party == "FPÖ") %>% 
+  summarize(female_share = mean(sex == "female"))
+
+average_fpö_female_share <- fpö_female_share %>%
+  filter(session >= 17) %>%
+  summarize(average_female_share = mean(female_share, na.rm = TRUE))
+
+grüne_female_share <- 
+  aut_core_political %>% 
+  group_by(session) %>% 
+  filter(party == "GRÜNE") %>% 
+  summarize(female_share = mean(sex == "female"))
+
+average_grüne_female_share <- grüne_female_share %>%
+  filter(session >= 16 & session != 26) %>%
+  summarize(average_female_share = mean(female_share, na.rm = TRUE))
+
+neos_female_share <- 
+  aut_core_political %>% 
+  group_by(session) %>% 
+  filter(party == "NEOS") %>% 
+  summarize(female_share = mean(sex == "female"))
+
+average_neos_female_share <- neos_female_share %>%
+  filter(session >= 25) %>%
+  summarize(average_female_share = mean(female_share, na.rm = TRUE))
+
+party_female_shares <- rbind(övp_female_share, spö_female_share, fpö_female_share, grüne_female_share, neos_female_share)
+
+parties_to_include <- c('ÖVP', 'SPÖ', 'FPÖ', 'GRÜNE', 'NEOS')
+
+aut_core_political_filtered <- aut_core_political %>%
+  filter(session >= 5, party %in% parties_to_include)
+
+# Calculate the female share for each party and session
+party_female_shares <- aut_core_political_filtered %>%
+  group_by(session, party) %>%
+  summarize(female_share = mean(sex == "female"))
+
+# Define the order of parties for plotting (optional)
+party_order <- c('ÖVP', 'SPÖ', 'FPÖ', 'GRÜNE', 'NEOS')
+
+# Create the bar plot
+ggplot(party_female_shares, aes(x = session, y = female_share, fill = party)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c('ÖVP' = 'turquoise', 'SPÖ' = 'red', 'FPÖ' = 'blue', 'GRÜNE' = 'green', 'NEOS' = 'pink')) +
+  labs(x = 'Session of Parliament', y = 'Female Share',
+       title = 'Female Share Across Austrian Parties by Session (Starting from Session 5)') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_continuous(breaks = unique(party_female_shares$session), labels = unique(party_female_shares$session)) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1))
+
 ```
 
 <div class = "answer">
-YOUR DESCRIPTION/INTERPRETATION SHOULD GO HERE
+I decided to explore the change in the share of females in the Austrian "Nationalrat" according to party affiliation starting 1945 until today. 
+
+Limitations
+The 5th session of parliament was the first after the second world war. Given a very different composition of parties in the "Nationalrat" before session 5, it was decided to exclude session 1 to 4  from this analysis. 
+
+The two major parties: ÖVP and SPÖ
+The two major Austrian Parties, the conservative ÖVP and the left-leaning SPÖ, first emerged in the 1945 election and dominated Austrian politics from the 5th until the 15th session of the "Nationalrat". We observe that the share of famales was substantially higher in the SPÖ compared to the ÖVP. From the 5th until the 15th session, the share of female politicians averaged around 3.9% in the ÖVP and 9.7% in the SPÖ. We observe that the share of females was substantially higher in the SPÖ compared to the ÖVP. This relativly higher share can also be observed from session 16 onwards while both parties (finally) increased their female share. From session 16 to 27, the ÖVP had an average female share of 23% and the SPÖ of 32%. 
+Two new parties: Green and FPÖ
+During the 16th and 17th session, two new political parties entered the ring the could hardly be more different: the left-wing Greens and the ultra-conservative FPÖ. Upon analyzing Figure 3 one observes that across the years the Green Party consistently had the highest female share avergaing 50% since they first joined parliament during the 17th session. The FPÖ which joined parliament during the 16th session varied in its female share but averaged rather low around 18.6%
+
+The most recent addition to parilament: NEOS
+During the 25th session of the "Nationalrat" the liberal NEOS party was part of the Nationalrat for the first time. Its female share averaged around 41.1%. It is thus the party with the highest share of females after the Greens. 
+
+Summary and Outlook
+All in all, the share of females in increased over the years. While the share of females has increased among the traditional parties ÖVP and SPÖ, it is in particular the newer parties, Green and NEOS with their high female share, that have substantially helped increase the female share of the entire parliament. 
+Given that the Nationalrat currently has a female share of just below 40% (see 2a) we have come a long way from 5.9% during its first session, but we still have some way to go in order to have a parliament that has the same share of females as society has.
 </div>
 
 <br>
